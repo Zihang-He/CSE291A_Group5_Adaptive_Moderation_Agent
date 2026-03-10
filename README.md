@@ -22,3 +22,54 @@ hezihang：目前这个代码就只是 文本数据->agent->关于文本有无co
 - **Stage 2 – Decision & Learning (to be added)**  
   - Will take `PerceptionState` as input and learn a policy over actions:
     - `do_nothing`, `downrank`, `add_friction`, `throttle`, etc.
+
+### Quick Start
+
+1. **Setup environment:**
+   ```bash
+   conda activate agents  # or your preferred environment
+   pip install openai python-dotenv numpy matplotlib seaborn scikit-learn
+   ```
+
+2. **Configure API keys:**
+   Create a `.env` file in the project root:
+   ```env
+   OPENAI_API_KEY=sk-...
+   OPENAI_BASE_URL=https://tritonai-api.ucsd.edu
+   OPENAI_MODEL=api-gpt-oss-120b
+   ```
+
+3. **Run perception on Jigsaw dataset:**
+   ```bash
+   python run_perception_on_jigsaw.py
+   ```
+   This generates `jigsaw_perception_output.jsonl` with perception states for each comment.
+
+4. **Evaluate perception results:**
+   ```bash
+   python evaluate_perception.py
+   ```
+   This creates comparison plots in `evaluation_plots/`:
+   - ROC curves for each label type
+   - Precision-recall curves
+   - Score distributions (toxic vs non-toxic)
+   - Correlation heatmap between scores and labels
+   - Confusion matrices at different thresholds
+   
+   Also prints summary metrics (AUC, precision, recall, F1) to the console.
+
+### Files
+
+- `perception.py` - Core perception module with `PerceptionAgent` and data structures
+- `data_pipeline.py` - Dataset loading utilities for Jigsaw CSV files
+- `run_perception_on_jigsaw.py` - Script to run perception over the dataset
+- `evaluate_perception.py` - Evaluation script that generates comparison plots
+- `jigsaw_perception_output.jsonl` - Output file with perception states (generated)
+- `evaluation_plots/` - Directory with visualization plots (generated)
+
+
+
+文字comments数据->llm给出评价->根据评价选择action->reward给score
+
+文字comments数据（1 添加图片数据，添加帖子数据，现有的是comments数据 不成组）->llm给出评价->根据评价选择action（2 用什么react等method选action，现有是直接llm reason写action）->reward给score（3 找其他办法定义reward 现在是随便写的hardcode定义->（4 现在只算了reward 没有update policy，写一个根据reward update policy）
+
