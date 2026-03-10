@@ -19,9 +19,12 @@ hezihang：目前这个代码就只是 文本数据->agent->关于文本有无co
     - Engagement‑driven risk
     - Short reasons and a suggested moderation action
 
-- **Stage 2 – Decision & Learning (to be added)**  
-  - Will take `PerceptionState` as input and learn a policy over actions:
-    - `do_nothing`, `downrank`, `add_friction`, `throttle`, etc.
+- **Stage 2 – Decision & Learning**
+  - Takes `PerceptionState` as input and chooses among:
+    - `do_nothing`, `downrank`, `add_friction`, `throttle`
+  - Baseline now includes a **ReAct-based action chooser** in `action_chooser.py`
+    that reasons over the structured state with a small local tool loop instead of
+    directly trusting the `suggested_action` string emitted by Stage 1.
 
 ### Quick Start
 
@@ -58,18 +61,39 @@ hezihang：目前这个代码就只是 文本数据->agent->关于文本有无co
    
    Also prints summary metrics (AUC, precision, recall, F1) to the console.
 
+5. **Run the ReAct action chooser on saved perception output:**
+   ```bash
+   python run_action_chooser_on_output.py
+   ```
+   This generates `jigsaw_action_output.jsonl` with an additional `action_decision`
+   field containing:
+   - `action_id`
+   - `action_name`
+   - `reasoning`
+   - `used_fallback`
+   - `trace`
+
+6. **Compare rollout policies in the simulator:**
+   ```bash
+   python roll_out_demo.py
+   ```
+   If API credentials are configured, the demo now includes a `ReAct Action Chooser`
+   policy in addition to the fixed baseline policies.
+
 ### Files
 
 - `perception.py` - Core perception module with `PerceptionAgent` and data structures
 - `data_pipeline.py` - Dataset loading utilities for Jigsaw CSV files
 - `run_perception_on_jigsaw.py` - Script to run perception over the dataset
+- `action_chooser.py` - ReAct-based Stage 2 action selection module
+- `run_action_chooser_on_output.py` - Script to attach ReAct actions to saved perception output
 - `evaluate_perception.py` - Evaluation script that generates comparison plots
 - `jigsaw_perception_output.jsonl` - Output file with perception states (generated)
+- `jigsaw_action_output.jsonl` - Output file with ReAct action decisions (generated)
 - `evaluation_plots/` - Directory with visualization plots (generated)
 
 
 
-文字comments数据->llm给出评价->根据评价选择action->reward给score
+文字comments数据->llm给出评价->ReAct根据评价选择action->reward给score
 
-文字comments数据（1 添加图片数据，添加帖子数据，现有的是comments数据 不成组）->llm给出评价->根据评价选择action（2 用什么react等method选action，现有是直接llm reason写action）->reward给score（3 找其他办法定义reward 现在是随便写的hardcode定义->（4 现在只算了reward 没有update policy，写一个根据reward update policy）
-
+文字comments数据（1 添加图片数据，添加帖子数据，现有的是comments数据 不成组）->llm给出评价->ReAct根据评价选择action（2 现在不是直接让第一阶段LLM写action，而是单独的action chooser）->reward给score（3 找其他办法定义reward 现在是随便写的hardcode定义->（4 现在只算了reward 没有update policy，写一个根据reward update policy）
