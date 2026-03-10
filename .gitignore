@@ -15,5 +15,5 @@ test_labels.csv.zip
 sample_submission.csv.zip
 
 # Generated outputs
-*.jsonl
-evaluation_plots/
+# *.jsonl
+# evaluation_plots/
