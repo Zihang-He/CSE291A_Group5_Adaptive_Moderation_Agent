@@ -67,6 +67,37 @@ hezihang：目前这个代码就只是 文本数据->agent->关于文本有无co
 - `jigsaw_perception_output.jsonl` - Output file with perception states (generated)
 - `evaluation_plots/` - Directory with visualization plots (generated)
 
+### Contextual Bandit (LinUCB) Demo
+
+Use this to learn an action policy from context + reward instead of directly executing LLM `suggested_action`.
+
+1. Generate perception states:
+   ```bash
+   python run_perception_on_jigsaw.py
+   ```
+2. Train/evaluate LinUCB:
+   ```bash
+   python roll_out_demo.py --data jigsaw_perception_output.jsonl --train-episodes 2000 --eval-episodes 500 --horizon 10 --plot-dir policy_evaluation_plots
+   ```
+
+The script reports mean episode return for:
+- `always_do_nothing`
+- `rule_policy`
+- `always_throttle`
+- `LinUCB (Greedy)` after online bandit updates
+
+LinUCB context features include:
+- environment observation from simulator (`obs`)
+- one-hot encoding of `PerceptionState.suggested_action` as a prior
+- bias term
+
+It also saves policy evaluation plots (to `--plot-dir`):
+- `roc_curves.png`
+- `precision_recall_curves.png`
+- `score_distributions.png`
+- `correlation_heatmap.png`
+- `confusion_matrices.png`
+
 
 
 文字comments数据->llm给出评价->根据评价选择action->reward给score
