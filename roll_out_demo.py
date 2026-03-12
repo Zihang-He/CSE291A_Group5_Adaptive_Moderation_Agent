@@ -32,8 +32,8 @@ def run_episode(env, policy_fn, name: str, fixed_item=None):
 
 def main():
     items = load_items("jigsaw_perception_output.jsonl")
-    item = items[0]
-    env = ModerationSimEnv(items, max_steps=30, seed=0, pos_frac=0.5)  # set pos_frac=0.5 if you want balance
+    item = items[6]
+    env = ModerationSimEnv(items, max_steps=30, seed=0)  # set pos_frac=0.5 if you want balance
 
     run_episode(env, always_do_nothing, "Always Do Nothing", item)
     run_episode(env, rule_policy, "Rule Policy", item)
