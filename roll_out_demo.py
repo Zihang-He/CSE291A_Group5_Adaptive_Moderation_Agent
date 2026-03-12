@@ -7,6 +7,7 @@ from sim.policies import (
     always_do_nothing,
     always_throttle,
     load_linear_policy,
+    make_react_policy,
     rule_policy,
 )
 
@@ -47,6 +48,11 @@ def main():
 
     run_episode(env, always_do_nothing, "Always Do Nothing")
     run_episode(env, rule_policy, "Rule Policy")
+    try:
+        react_policy = make_react_policy(env)
+        run_episode(env, react_policy, "ReAct Action Chooser")
+    except Exception as exc:
+        print(f"\n[skip] ReAct Action Chooser unavailable: {exc}")
     run_episode(env, always_throttle, "Always Throttle")
     if args.policy_path:
         learned_policy = load_linear_policy(args.policy_path, seed=args.seed)

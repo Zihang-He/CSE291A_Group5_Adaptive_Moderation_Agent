@@ -1,4 +1,20 @@
-evaluation_plots/
-*.csv
-*.jsonl
+.env
+.venv/
 __pycache__/
+sim/__pycache__/
+
+# Local datasets and archives
+jigsaw-toxic-comment-classification-challenge.zip
+*.csv
+train.csv
+test.csv
+test_labels.csv
+sample_submission.csv
+train.csv.zip
+test.csv.zip
+test_labels.csv.zip
+sample_submission.csv.zip
+
+# Generated outputs
+*.jsonl
+evaluation_plots/
