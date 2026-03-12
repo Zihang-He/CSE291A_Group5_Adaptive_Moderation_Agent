@@ -105,6 +105,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--l2", type=float, default=1e-4)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--pos-frac", type=float, default=None)
+    p.add_argument("--w-good", type=float, default=0.10)
+    p.add_argument("--w-reports", type=float, default=1.00)
+    p.add_argument("--w-cost", type=float, default=0.50)
+    p.add_argument("--w-harm-spread", type=float, default=0.15)
+    p.add_argument("--w-benign-suppression", type=float, default=0.30)
     p.add_argument("--print-every", type=int, default=100)
     p.add_argument("--save-path", type=str, default="sim/learned_policy.npz")
     return p.parse_args()
@@ -116,7 +121,17 @@ def main() -> None:
     policy = LinearSoftmaxPolicy(obs_dim=8, n_actions=4, seed=args.seed)
 
     def make_env(eval_seed: int) -> ModerationSimEnv:
-        return ModerationSimEnv(items, T=args.T, seed=eval_seed, pos_frac=args.pos_frac)
+        return ModerationSimEnv(
+            items,
+            T=args.T,
+            seed=eval_seed,
+            pos_frac=args.pos_frac,
+            w_good=args.w_good,
+            w_reports=args.w_reports,
+            w_cost=args.w_cost,
+            w_harm_spread=args.w_harm_spread,
+            w_benign_suppression=args.w_benign_suppression,
+        )
 
     print("== before training ==")
     for name, fn in [
@@ -164,6 +179,11 @@ def main() -> None:
             lr=args.lr,
             baseline_momentum=args.baseline_momentum,
             l2=args.l2,
+            w_good=args.w_good,
+            w_reports=args.w_reports,
+            w_cost=args.w_cost,
+            w_harm_spread=args.w_harm_spread,
+            w_benign_suppression=args.w_benign_suppression,
             avg_return_last_100=float(np.mean(history[-100:])) if history else 0.0,
         )
         print(f"\nsaved policy params to: {args.save_path}")

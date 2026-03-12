@@ -54,6 +54,11 @@ class ModerationSimEnv:
         seed: int = 0,
         # if you *want* balanced sampling you can set pos_frac != dataset ratio
         pos_frac: float | None = None,
+        w_good: float = 0.10,
+        w_reports: float = 1.00,
+        w_cost: float = 0.50,
+        w_harm_spread: float = 0.15,
+        w_benign_suppression: float = 0.30,
     ):
         self.items = items
         self.T = T
@@ -84,10 +89,11 @@ class ModerationSimEnv:
         self.v_recover = 0.05
 
         # --- reward weights ---
-        self.w_good = 0.10
-        self.w_reports = 1.00
-        self.w_cost = 0.50
-        self.w_harm_spread = 0.15  # penalize harmful diffusion even w/o reports
+        self.w_good = float(w_good)
+        self.w_reports = float(w_reports)
+        self.w_cost = float(w_cost)
+        self.w_harm_spread = float(w_harm_spread)  # penalize harmful diffusion even w/o reports
+        self.w_benign_suppression = float(w_benign_suppression)
 
         # episode state
         self.t = 0
@@ -194,11 +200,15 @@ class ModerationSimEnv:
         # --- reward ---
         good = delta_E * (1.0 - self.harm)  # "healthy" engagement
         harm_spread = self.harm * delta_E   # harmful diffusion even if no one reports
+        vis_drop = max(0.0, 1.0 - params.vis_mult)
+        potential_reach = self.base_E + self.a_conf * self.conf + self.a_S * self.S
+        benign_suppression = (1.0 - self.harm) * vis_drop * potential_reach
         reward = (
             self.w_good * good
             - self.w_reports * delta_R
             - self.w_harm_spread * harm_spread
             - self.w_cost * params.cost
+            - self.w_benign_suppression * benign_suppression
         )
 
         self.t += 1
@@ -215,5 +225,6 @@ class ModerationSimEnv:
             "E": self.E,
             "R": self.R,
             "S": self.S,
+            "benign_suppression": benign_suppression,
         }
         return self._obs(), float(reward), done, info
