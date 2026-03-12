@@ -6,10 +6,15 @@ from sim.env import ModerationSimEnv
 from sim.policies import rule_policy, always_do_nothing, always_throttle
 
 
-def run_episode(env, policy_fn, name: str):
-    obs = env.reset()
+def run_episode(env, policy_fn, name: str, fixed_item=None):
     total_r = 0.0
     print(f"\n=== {name} ===")
+    
+    if fixed_item is None:
+        obs = env.reset()
+    else:
+        obs = env.reset_to_item(fixed_item)
+        
     for t in range(env.max_steps):
         a = policy_fn(obs)
         obs, r, done, info = env.step(a)
@@ -27,11 +32,12 @@ def run_episode(env, policy_fn, name: str):
 
 def main():
     items = load_items("jigsaw_perception_output.jsonl")
+    item = items[0]
     env = ModerationSimEnv(items, max_steps=30, seed=0, pos_frac=0.5)  # set pos_frac=0.5 if you want balance
 
-    run_episode(env, always_do_nothing, "Always Do Nothing")
-    run_episode(env, rule_policy, "Rule Policy")
-    run_episode(env, always_throttle, "Always Throttle")
+    run_episode(env, always_do_nothing, "Always Do Nothing", item)
+    run_episode(env, rule_policy, "Rule Policy", item)
+    run_episode(env, always_throttle, "Always Throttle", item)
 
 
 if __name__ == "__main__":

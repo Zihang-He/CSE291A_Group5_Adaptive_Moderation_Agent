@@ -70,8 +70,8 @@ class ModerationSimEnv:
         self.escalation_boost = 4.0
 
         # report probability parameters
-        self.harm_weight = 3.0
-        self.engagement_weight = 0.7
+        self.harm_weight = 2.0
+        self.engagement_weight = 0.9
         self.escalation_weight = 1.2
 
         # escalation update parameters
@@ -83,11 +83,11 @@ class ModerationSimEnv:
         self.visibility_recovery = 0.05
 
         # reward weights
-        self.weight_healthy_engagement = 0.20
-        self.weight_reports = 1.00
-        self.weight_intervention_cost = 0.50
-        self.weight_harmful_spread = 0.30
-        self.weight_benign_suppression = 0.25
+        self.weight_healthy_engagement = 0.5
+        self.weight_reports = 2.00
+        self.weight_intervention_cost = 0.70
+        self.weight_harmful_spread = 0.20
+        self.weight_benign_suppression = 5
 
         # episode state
         self.current_step = 0
@@ -162,6 +162,20 @@ class ModerationSimEnv:
         self.total_engagement = 0.0
         self.total_reports = 0.0
         self.escalation_level = 0.0
+
+        return self._obs()
+
+    def reset_to_item(self, item: Item) -> np.ndarray:
+        self.current_step = 0
+        self.item = item
+
+        state = self.item.state
+        self.harm_score, self.conflict_score, self.ambiguity, self.uncertainty, initial_escalation = self._extract_latents(state)
+
+        self.visibility = 1.0
+        self.total_engagement = 0.0
+        self.total_reports = 0.0
+        self.escalation_level = initial_escalation
 
         return self._obs()
 
