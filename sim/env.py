@@ -46,61 +46,63 @@ class ModerationSimEnv:
     - Platform dynamics evolve: visibility V, engagement E, reports R, escalation S.
     - Agent chooses intervention actions each step.
     """
-
+    
     def __init__(
-        self,
-        items: List[Item],
-        T: int = 10,
-        seed: int = 0,
-        # if you *want* balanced sampling you can set pos_frac != dataset ratio
-        pos_frac: float | None = None,
+        self, items: List[Item], 
+        max_steps: int = 10, 
+        seed: int = 0, 
+        # balanced sampling set pos_frac != dataset ratio
+        pos_frac: float | None = None
     ):
-        self.items = items
-        self.T = T
-        self.rng = np.random.default_rng(seed)
 
-        # optional stratified buckets (based on dataset label toxic)
+        self.items = items
+        self.max_steps = max_steps
+        self.rng = np.random.default_rng(seed)
+        random.seed(seed)
+
         self.pos_items = [it for it in items if int(it.labels.get("toxic", 0)) == 1]
         self.neg_items = [it for it in items if int(it.labels.get("toxic", 0)) == 0]
         self.pos_frac = pos_frac
 
-        # --- dynamics hyperparameters (tunable) ---
-        # engagement intensity
-        self.base_E = 1.0
-        self.a_conf = 8.0
-        self.a_S = 4.0
+        # engagement dynamics parameters
+        self.base_engagement_rate = 1.0
+        self.conflict_boost = 8.0
+        self.escalation_boost = 4.0
 
-        # report probability logits
-        self.b_harm = 3.0
-        self.b_logE = 0.7
-        self.b_S = 1.2
+        # report probability parameters
+        self.harm_weight = 3.0
+        self.engagement_weight = 0.7
+        self.escalation_weight = 1.2
 
-        # escalation update
-        self.c_conf = 2.0
-        self.c_reports = 0.9
-        self.c_action = 0.7
+        # escalation update parameters
+        self.conflict_drive = 2.0
+        self.report_drive = 0.9
+        self.action_suppression = 0.7
 
-        # visibility recovery per step (models "cooldown wears off")
-        self.v_recover = 0.05
+        # visibility recovery
+        self.visibility_recovery = 0.05
 
-        # --- reward weights ---
-        self.w_good = 0.10
-        self.w_reports = 1.00
-        self.w_cost = 0.50
-        self.w_harm_spread = 0.15  # penalize harmful diffusion even w/o reports
+        # reward weights
+        self.weight_healthy_engagement = 0.20
+        self.weight_reports = 1.00
+        self.weight_intervention_cost = 0.50
+        self.weight_harmful_spread = 0.30
+        self.weight_benign_suppression = 0.25
 
         # episode state
-        self.t = 0
+        self.current_step = 0
         self.item: Item | None = None
-        self.harm = 0.0
-        self.conf = 0.0
+
+        self.harm_score = 0.0
+        self.conflict_score = 0.0
         self.ambiguity = 0.0
         self.uncertainty = 0.0
-        self.V = 1.0
-        self.E = 0.0
-        self.R = 0.0
-        self.S = 0.0
 
+        self.visibility = 1.0
+        self.total_engagement = 0.0
+        self.total_reports = 0.0
+        self.escalation_level = 0.0
+        
     # --------- feature extraction ----------
     def _extract_latents(self, state: Dict[str, Any]) -> Tuple[float, float, float, float, float]:
         tox = float(state.get("toxicity", 0.0))
@@ -123,26 +125,26 @@ class ModerationSimEnv:
 
     def _obs(self) -> np.ndarray:
         # keep numbers bounded
-        E_norm = math.log1p(self.E) / 5.0
-        R_norm = math.log1p(self.R) / 5.0
+        E_norm = math.log1p(self.total_engagement) / 5.0
+        R_norm = math.log1p(self.total_reports) / 5.0
 
         return np.array(
             [
-                self.harm,
-                self.conf,
+                self.harm_score,
+                self.conflict_score,
                 self.ambiguity,
                 self.uncertainty,
-                self.V,
+                self.visibility,
                 E_norm,
                 R_norm,
-                self.S,
+                self.escalation_level,
             ],
             dtype=np.float32,
         )
 
     # --------- gym-like API ----------
     def reset(self) -> np.ndarray:
-        self.t = 0
+        self.current_step = 0
 
         if self.pos_frac is None:
             self.item = random.choice(self.items)
@@ -154,12 +156,12 @@ class ModerationSimEnv:
                 self.item = random.choice(self.neg_items) if self.neg_items else random.choice(self.items)
 
         st = self.item.state
-        self.harm, self.conf, self.ambiguity, self.uncertainty, esc0 = self._extract_latents(st)
+        self.harm_score, self.conflict_score, self.ambiguity, self.uncertainty, self.escalation_level = self._extract_latents(st)
 
-        self.V = 1.0
-        self.E = 0.0
-        self.R = 0.0
-        self.S = esc0
+        self.visibility = 1.0
+        self.total_engagement = 0.0
+        self.total_reports = 0.0
+        self.escalation_level = 0.0
 
         return self._obs()
 
@@ -168,52 +170,55 @@ class ModerationSimEnv:
         params = ACTION_TABLE[a]
 
         # --- apply action effect on visibility instantly ---
-        self.V = clip01(self.V * params.vis_mult)
+        self.visibility = clip01(self.visibility * params.vis_mult)
         # slight recovery towards 1.0 each step
-        self.V = clip01(self.V + self.v_recover)
+        self.visibility = clip01(self.visibility + self.visibility_recovery)
 
         # --- engagement increment (depends on conf + escalation + visibility) ---
-        lam = self.V * (self.base_E + self.a_conf * self.conf + self.a_S * self.S)
+        lam = self.visibility * (self.base_engagement_rate + self.conflict_boost * self.conflict_score + self.escalation_boost * self.escalation_level)
         lam = max(lam, 0.01)
         delta_E = int(self.rng.poisson(lam=lam))
 
         # --- reports increment (depends on harm + current engagement + escalation) ---
-        logit = self.b_harm * self.harm + self.b_logE * math.log1p(self.E) + self.b_S * self.S
+        logit = self.harm_weight * self.harm_score + self.engagement_weight * math.log1p(self.total_engagement) + self.escalation_weight * self.escalation_level
         p_report = sigmoid(logit) * params.harm_mult
         p_report = float(np.clip(p_report, 0.0, 1.0))
         delta_R = int(self.rng.binomial(n=max(delta_E, 0), p=p_report))
 
         # --- update E/R ---
-        self.E += float(delta_E)
-        self.R += float(delta_R)
+        self.total_engagement += float(delta_E)
+        self.total_reports += float(delta_R)
 
         # --- escalation update ---
-        drive = sigmoid(self.c_conf * self.conf + self.c_reports * delta_R - self.c_action * ACTION_STRENGTH[a])
-        self.S = clip01(0.8 * self.S + 0.2 * drive)
+        drive = sigmoid(self.conflict_drive * self.conflict_score + self.report_drive * delta_R - self.action_suppression * ACTION_STRENGTH[a])
+        self.escalation_level = clip01(0.8 * self.escalation_level + 0.2 * drive)
 
         # --- reward ---
-        good = delta_E * (1.0 - self.harm)  # "healthy" engagement
-        harm_spread = self.harm * delta_E   # harmful diffusion even if no one reports
+        good = delta_E * (1.0 - self.harm_score)  # "healthy" engagement
+        harm_spread = self.harm_score * delta_E   # harmful diffusion even if no one reports
+        
+        benign_suppression_penalty = (1 - self.harm_score) * ACTION_STRENGTH[a]
         reward = (
-            self.w_good * good
-            - self.w_reports * delta_R
-            - self.w_harm_spread * harm_spread
-            - self.w_cost * params.cost
+            self.weight_healthy_engagement * good
+            - self.weight_reports * delta_R
+            - self.weight_harmful_spread * harm_spread
+            - self.weight_intervention_cost * params.cost
+            - self.weight_benign_suppression * benign_suppression_penalty
         )
 
-        self.t += 1
-        done = self.t >= self.T
+        self.current_step += 1
+        done = self.current_step >= self.max_steps
 
         info = {
             "id": self.item.id if self.item else None,
             "label_toxic": int(self.item.labels.get("toxic", 0)) if self.item else None,
-            "harm": self.harm,
-            "conf": self.conf,
-            "V": self.V,
+            "harm": self.harm_score,
+            "conf": self.conflict_score,
+            "V": self.visibility,
             "delta_E": delta_E,
             "delta_R": delta_R,
-            "E": self.E,
-            "R": self.R,
-            "S": self.S,
+            "E": self.total_engagement,
+            "R": self.total_reports,
+            "S": self.escalation_level,
         }
         return self._obs(), float(reward), done, info

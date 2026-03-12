@@ -10,7 +10,7 @@ def run_episode(env, policy_fn, name: str):
     obs = env.reset()
     total_r = 0.0
     print(f"\n=== {name} ===")
-    for t in range(env.T):
+    for t in range(env.max_steps):
         a = policy_fn(obs)
         obs, r, done, info = env.step(a)
         total_r += r
@@ -27,7 +27,7 @@ def run_episode(env, policy_fn, name: str):
 
 def main():
     items = load_items("jigsaw_perception_output.jsonl")
-    env = ModerationSimEnv(items, T=10, seed=0, pos_frac=None)  # set pos_frac=0.5 if you want balance
+    env = ModerationSimEnv(items, max_steps=30, seed=0, pos_frac=0.5)  # set pos_frac=0.5 if you want balance
 
     run_episode(env, always_do_nothing, "Always Do Nothing")
     run_episode(env, rule_policy, "Rule Policy")
