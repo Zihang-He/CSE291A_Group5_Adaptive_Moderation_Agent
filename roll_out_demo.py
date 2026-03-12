@@ -1,9 +1,15 @@
 # sim/rollout_demo.py
-import numpy as np
+import argparse
 
 from sim.data import load_items
 from sim.env import ModerationSimEnv
-from sim.policies import rule_policy, always_do_nothing, always_throttle
+from sim.policies import (
+    always_do_nothing,
+    always_throttle,
+    load_linear_policy,
+    make_react_policy,
+    rule_policy,
+)
 
 
 def run_episode(env, policy_fn, name: str, fixed_item=None):
@@ -30,14 +36,32 @@ def run_episode(env, policy_fn, name: str, fixed_item=None):
     print(f"Total reward: {total_r:+.3f}")
 
 
-def main():
-    items = load_items("jigsaw_perception_output.jsonl")
-    item = items[6]
-    env = ModerationSimEnv(items, max_steps=30, seed=0)  # set pos_frac=0.5 if you want balance
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser()
+    p.add_argument("--jsonl", type=str, default="jigsaw_perception_output.jsonl")
+    p.add_argument("--T", type=int, default=10)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--pos-frac", type=float, default=None)
+    p.add_argument("--policy-path", type=str, default=None)
+    return p.parse_args()
 
-    run_episode(env, always_do_nothing, "Always Do Nothing", item)
-    run_episode(env, rule_policy, "Rule Policy", item)
-    run_episode(env, always_throttle, "Always Throttle", item)
+
+def main():
+    args = parse_args()
+    items = load_items(args.jsonl)
+    env = ModerationSimEnv(items, T=args.T, seed=args.seed, pos_frac=args.pos_frac)
+
+    run_episode(env, always_do_nothing, "Always Do Nothing")
+    run_episode(env, rule_policy, "Rule Policy")
+    try:
+        react_policy = make_react_policy(env)
+        run_episode(env, react_policy, "ReAct Action Chooser")
+    except Exception as exc:
+        print(f"\n[skip] ReAct Action Chooser unavailable: {exc}")
+    run_episode(env, always_throttle, "Always Throttle")
+    if args.policy_path:
+        learned_policy = load_linear_policy(args.policy_path, seed=args.seed)
+        run_episode(env, learned_policy.policy_fn(greedy=True), "Learned Policy (Greedy)")
 
 
 if __name__ == "__main__":
